@@ -5,6 +5,77 @@
 
 ---
 
+## 0. 可复制执行的工程约定（目录 + 版本）
+
+本文档默认技术栈：**Java 17 + Spring Boot 3（Maven）+ PostgreSQL + Redis + Next.js（pnpm）**。
+
+### 0.1 仓库目录约定（推荐）
+
+> 建议统一到如下目录结构（下面所有命令均基于此结构，可直接复制）。
+
+```
+repo/
+  backend/                  # Spring Boot 3（Maven）
+    mvnw  mvnw.cmd          # ✅ 必须提交（Maven Wrapper）
+    pom.xml
+    src/
+    .env.example
+  frontend/                 # Next.js
+    package.json
+    pnpm-lock.yaml
+    next.config.*
+    .env.example
+  deploy/
+    docker-compose.dev.yml  # 本地开发依赖（Postgres/Redis）
+    docker-compose.stg.yml  # 预发（可选）
+  docs/
+    api-contract.md
+  .github/
+  CONTRIBUTING.md
+  RELEASE_CHECKLIST.md
+```
+
+### 0.2 必备版本（写死，避免“我电脑能跑你电脑不能跑”）
+
+- Java：**17**（建议 Temurin/Corretto 任一）
+- Maven：使用仓库内的 `mvnw`（避免本机 Maven 版本差异）
+- Node.js：**20 LTS**（建议用 nvm/fnm 管理）
+- pnpm：**9**（建议用 corepack 管理）
+- Docker Desktop：用于启动 Postgres/Redis
+
+---
+
+## 0.3 一键启动（新同事/新机器直接复制）
+
+> 以下命令默认你在仓库根目录（`repo/`）。
+
+### 0.3.1 启动依赖（Postgres + Redis）
+
+```bash
+docker compose -f deploy/docker-compose.dev.yml up -d
+```
+
+### 0.3.2 启动后端（Spring Boot）
+
+```bash
+cd backend
+cp .env.example .env  # Windows: copy .env.example .env
+./mvnw -q -DskipTests=true spring-boot:run
+```
+
+### 0.3.3 启动前端（Next.js）
+
+```bash
+cd ../frontend
+corepack enable
+corepack prepare pnpm@9.0.0 --activate
+pnpm install
+cp .env.example .env  # Windows: copy .env.example .env
+pnpm dev
+```
+
+---
+
 ## 1. 分支策略（必须遵守）
 
 ### 分支说明
@@ -27,6 +98,26 @@
   1) 关联 Issue
   2) CI 全绿
   3) 至少 1 名 Reviewer 通过
+
+### 常用 Git 命令（可直接复制）
+
+> 默认你已拉取仓库并在仓库根目录。
+
+```bash
+# 保持本地 dev 最新
+git checkout dev
+git pull --rebase origin dev
+
+# 从 dev 创建功能分支
+git checkout -b feat/dashboard-streamer
+
+# 开发提交（示例）
+git add .
+git commit -m "feat(dashboard): add streamer session summary"
+
+# 推送分支
+git push -u origin feat/dashboard-streamer
+```
 
 ---
 
@@ -68,12 +159,45 @@ Owner 对其模块的以下事项负责：
 ### 后端（Java）
 - 统一格式化：Spotless / Checkstyle（二选一也行，但必须统一）
 - 单测：核心 service 必须有（聚合口径/权限判断/幂等等）
-- 构建：`mvn -q test` 必须通过
+- 构建：必须使用 Maven Wrapper：`cd backend && ./mvnw -q test`
+
+#### 后端命令（可复制）
+
+```bash
+# 运行单测 + 编译
+cd backend
+./mvnw -q test
+
+# 仅编译（不跑单测）
+./mvnw -q -DskipTests package
+
+# （如已接入 Spotless）自动格式化
+./mvnw -q spotless:apply
+
+# 运行本地服务（不跑单测）
+./mvnw -q -DskipTests=true spring-boot:run
+```
 
 ### 前端（Next.js）
 - 统一格式化：Prettier
 - Lint：ESLint
-- 构建：`pnpm -s lint && pnpm -s build`
+- 构建：`cd frontend && pnpm -s lint && pnpm -s build`
+
+#### 前端命令（可复制）
+
+```bash
+cd frontend
+corepack enable
+corepack prepare pnpm@9.0.0 --activate
+pnpm install
+
+# Lint + Build
+pnpm -s lint
+pnpm -s build
+
+# 本地开发
+pnpm dev
+```
 
 ### PR 必须满足
 - CI 全绿
@@ -99,10 +223,59 @@ Owner 对其模块的以下事项负责：
 
 ## 6. 环境与配置
 
-### 必须做到
-- 本地一键启动：`docker-compose up` 起 DB/Redis；前后端各自启动。
-- 配置分环境：`application-dev.yml` / `application-prod.yml`（或 `.env`）
-- 禁止提交密钥：使用示例文件 `*.example`。
+### 6.1 本地开发（可复制）
+
+#### 6.1.1 启动/停止依赖
+
+```bash
+# 启动 Postgres + Redis
+docker compose -f deploy/docker-compose.dev.yml up -d
+
+# 查看状态
+docker compose -f deploy/docker-compose.dev.yml ps
+
+# 停止（保留数据卷）
+docker compose -f deploy/docker-compose.dev.yml down
+
+# 停止并清空数据（⚠️ 会删库）
+docker compose -f deploy/docker-compose.dev.yml down -v
+```
+
+#### 6.1.2 环境变量（必须复制示例文件）
+
+```bash
+# 后端
+cd backend
+cp .env.example .env
+
+# 前端
+cd ../frontend
+cp .env.example .env
+```
+
+> Windows PowerShell 等价命令：
+
+```powershell
+copy backend\.env.example backend\.env
+copy frontend\.env.example frontend\.env
+```
+
+#### 6.1.3 推荐端口（如需改动请在 .env 里改）
+
+- Postgres：`5432`
+- Redis：`6379`
+- 后端 API：`8080`
+- 前端 Web：`3000`
+
+### 6.2 多环境配置（dev / stg / prod）
+
+- 后端：使用 Spring Profile（推荐 `application-dev.yml / application-stg.yml / application-prod.yml`），敏感项走环境变量。
+- 前端：使用 `.env`（本地）+ 部署平台环境变量（stg/prod）。
+
+### 6.3 禁止事项（CI 会检查）
+
+- 禁止提交：`.env`、任何密钥/token、生产域名私钥等。
+- 必须提供：`.env.example`（包含所有必填项的占位符）。
 
 ---
 
